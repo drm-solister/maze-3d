@@ -12,7 +12,8 @@ fn main() {
     // let empty_block = maze::Block::Empty(maze::Color::red());
     // let full_block = maze::Block::Full(maze::Color::black());
 
-    let dims: (i32, i32, i32) = (21,1,21);
+    let dims: (i32, i32, i32) = (51,1,51);
+    // let dims = (11, 3, 11);
     let len = (dims.0*dims.1*dims.2) as usize;
     
 
@@ -54,6 +55,7 @@ fn main() {
         }
     }
 
+    maze.blocks[end] = maze::Block::Goal;
     // print the solved maze
     maze.print();
     // println!("{:?}", x);
@@ -97,4 +99,10 @@ hunt and kill is only going in a straight line now wth
 just realized hunt and kill doesnt let me define the start and end point
 
 
+my incorrect implementation of prims allows for multiple paths, 
+
+8/6/2022
+prims now works perfectly! although i think its technically possible for the end point to be blocked in, albiet rare
+
 */
+

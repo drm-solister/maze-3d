@@ -2,8 +2,9 @@ use rand::Rng;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::cmp::Ordering;
-use std::rc::Rc;
-use std::cell::RefCell;
+// use std::rc::Rc;
+// use std::cell::RefCell;
+use colored::Colorize;
 
 use crate::neighborhood;
 
@@ -55,7 +56,7 @@ impl Maze {
                 match block {
                     Block::Empty    => print!("[ ]"), // full char █
                     Block::Full     => print!("███"),
-                    Block::Occupied => print!("[o]"),
+                    Block::Occupied => print!("{}", "███".green()),
                     Block::Goal     => print!("[!]")
                 }
             }
@@ -266,103 +267,12 @@ pub enum Block {
 maze generation algorithms
 probably dumb to seperate the code like this but lets worry about that later
 
-currently: hunt and kill <- abandon ship
-later: prim's
+currently: prim's
+later: ?
 
 prims/maybe all of them could work by having potential walls only on every other tile in every direction
 */
 impl Maze {
-    pub fn generate_maze_hunt_and_kill(&mut self) {
-        for _ in 0..10000 { // no set number of iterations, just enough so that the probabilaty of the maze being complete is high
-            
-            let random_start = rand::thread_rng().gen_range(0..self.blocks.len()); // should not be an edge block
-            let mut p = random_start;
-            // p is the random starting place.
-            // if p is a wall, try walking away from it.
-            // if p is empty, try walking in a random valid location.
-            // either way, walk?
-
-            let mut can_walk = true;
-            while can_walk {
-                // p = rand::thread_rng().gen_range(0..self.blocks.len());
-                if !self.valid_new_wall(p) { break; }
-                // if !self.has_diagonals(p) { continue; }
-                if let Block::Empty = self.blocks[p] { self.blocks[p] = Block::Full; } // unneeded conditional. // place on p
-
-                // p is the index of a valid new wall. place it and choose one of its valid neighbors to be the next
-                let mut p_neighbor = self.indicies_of_neighbors(p as i32, Block::Empty);
-
-                // im embarrassed to have typed this but it do work mostly. on one iter. some issues with diagonals
-                // one time it got into an infinite loop but idk how lol -- make that twice
-
-                use rand::thread_rng;
-                use rand::seq::SliceRandom;
-
-                // println!("before shuffle: {:?}", p_neighbor);
-                let mut rng = thread_rng();
-                let mut p_neighbor = &mut p_neighbor[..];
-                p_neighbor[..].shuffle(&mut rng);
-                // println!("after shuffle: {:?}\n", p_neighbor);
-
-                can_walk = false;
-                for n in p_neighbor { // this should be random order
-                    if self.valid_new_wall(*n as usize) {
-                        p = *n as usize;
-                        can_walk = true;
-                        break;
-                    }
-                }
-
-            }
-
-        }
-    } 
-
-    // wall is valid if it shares 3 or more edges with open blocks and has no walls on its diagonals
-    fn valid_new_wall(&self, index: usize) -> bool {
-        let neighbors = self.indicies_of_neighbors(index as i32, Block::Empty);
-
-        let mut open_count = 0;
-
-        for i in neighbors {
-            if let Block::Empty = self.blocks[i as usize] { open_count+=1; }
-        }
-
-        let corner_neighbors = self.corner_neighbors(index as i32, Block::Full);
-        if corner_neighbors.len() > 1 { return false; }
-
-        if open_count >= 3 { return true; } else { return false; }
-    }
-
-    fn corner_neighbors(&self, index: i32, look_for: Block) -> Vec<i32> {
-        let corner_offsets = neighborhood::get_offsets(self.dims, &neighborhood::NeighborhoodMethod::Diagonal);
-        // return 0;
-
-        let mut vec = Vec::new();
-        for i in corner_offsets {
-            if let None = i { continue ;}
-
-            let new_index = index+i.unwrap();
-
-            if !(new_index >= self.blocks.len() as i32 || new_index < 0) {
-                // the neighbor is in bounds
-                let dims = self.dims;
-                if index % self.dims.0 == 0 && new_index == index-1 { continue; } // avoid wrapping around
-                if (index+1) % self.dims.0 == 0 && new_index == index+1 { continue; }
-
-                let z = index%(dims.0*dims.2)/dims.0;
-
-                if z == 0 && new_index == index-self.dims.0 { continue; }
-                if z == self.dims.2-1 && new_index == index+self.dims.0 { continue; }
-
-
-                if look_for == self.blocks[new_index as usize] {
-                    vec.push(new_index);
-                }
-            }
-        }
-        return vec;
-    }
 
     /*
     not sure if i can call this real prims
@@ -370,10 +280,6 @@ impl Maze {
     */
     pub fn generate_prims(&mut self) {
         // create a sub-grid of nodes
-        // let prim_nodes: Vec<(usize, bool)> = (0..self.blocks.len())
-        //     .filter(|x| self.coord_of_index(*x as i32).unwrap().0%2==0 && self.coord_of_index(*x as i32).unwrap().2%2==0)
-        //     .map(|x| (x, false))
-        //     .collect();
 
         /*
         Some(false) -> No edge to vertex
@@ -394,22 +300,13 @@ impl Maze {
 
         let prim_offsets = neighborhood::get_offsets(self.dims, &neighborhood::NeighborhoodMethod::Prims);
 
-        // println!("{:?}", prim_nodes);
-        // for (i, node) in prim_nodes.iter().enumerate() {
-        //     if let Some(_) = node { self.blocks[i] = Block::Full; }
-        // }
-
         if self.dims.0 % 2 == 0 || self.dims.1 % 2 == 0 || self.dims.2 % 2 == 0 { panic!("grid dimensions must be odd for maze"); }
 
         let mut rng = rand::thread_rng();
-
         // let mut rng = ChaCha20Rng::seed_from_u64(2);
 
-        // // // generate edges by starting at low indicies and only drawing a single edge in the positive x,y,z direction each. so 3 edges. 
-        // // // this makes for no duplicates and every connection
-        // // // make prim nodes contain references to all the edges theyre connected to -> adjacency list?
-        // // let mut edges: Vec<Rc<RefCell<Edge>>> = Vec::new();
-        // // let mut adj_list: Vec<Vec<Rc<RefCell<Edge>>>> = vec![Vec::new(); self.blocks.len()];
+        // generate edges by starting at low indicies and only drawing a single edge in the positive x,y,z direction each. so 3 edges. 
+        // this makes for no duplicates and every connection
 
         let mut edges: Vec<Edge> = Vec::new();
         let mut adj_list: Vec<Vec<&Edge>> = vec![Vec::new(); self.blocks.len()];
@@ -466,21 +363,28 @@ impl Maze {
         // p is now this edge
         // loop
 
-        // println!("edges: {:?}", edges);
+        // rename p and next_p to point_a, point_b. they are not "next"
         for i in 0..1000 {
-
+            // println!("i: {:?}", i);
             let mut next_p = p;
             let mut mid_coord = 0;
+            let mut draw_mid = false;
             for (i, edge) in edges.iter().enumerate() {
-                if prim_nodes[edge.to].unwrap() != prim_nodes[edge.from].unwrap() { // one of the verts connected by the edge is on the tree
+                if prim_nodes[edge.to].unwrap() != prim_nodes[edge.from].unwrap() { // only one of the verts connected by the edge is on the tree
 
-                    if edge.to != p { // edge.to should be the next node
-                        next_p = edge.to;
-                    } else {
-                        next_p = edge.from;
-                    }
+                    p = edge.to;
+                    next_p = edge.from;
+
                     mid_coord = self.mid_coord(edge.to, edge.from);
+                    draw_mid = true;
+                    
+
+                    if next_p == 140 {
+                        let stop_here = 0;
+                    }
+
                     edges.remove(i);
+
                     break;
                 }
             }
@@ -488,14 +392,17 @@ impl Maze {
             self.blocks[p] = Block::Empty;
             self.blocks[next_p] = Block::Empty;
             // let mid_coord = self.mid_coord(p, next_p);
-            // if mid_coord != 999 {
-                self.blocks[mid_coord] = Block::Empty;
-            // }
+            // draw_mid = true;
+            if draw_mid { self.blocks[mid_coord] = Block::Empty; }
 
             prim_nodes[p] = Some(true);
             prim_nodes[next_p] = Some(true);
 
-            p = next_p;
+            // let x = 0; // debug breakpoint
+
+            // p = next_p;
+
+            // self.print();
 
         }
 
