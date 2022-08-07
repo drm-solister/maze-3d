@@ -2,8 +2,6 @@ use rand::Rng;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::cmp::Ordering;
-// use std::rc::Rc;
-// use std::cell::RefCell;
 use colored::Colorize;
 
 use crate::neighborhood;
@@ -13,6 +11,14 @@ pub struct Maze {
     pub dims: (i32, i32, i32),
     pub neighbor_offsets: [Option<i32>; 26],
     pub neighborhood_method: neighborhood::NeighborhoodMethod,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Block {
+    Empty,
+    Full,
+    Occupied,
+    Goal,
 }
 
 impl Maze {
@@ -84,12 +90,7 @@ impl Maze {
         return Some(index);
     }
 
-    // prevent wrappinga around the sides
-    // if the potential neighbor is one less, you cannot be on the left edge -> index % x_dim == 0
-    // if the potential neighbor is one more, you cannot be on the right edge -> index+1 & x_dim == 0
-    // if the potential neighbor is x_dim more, you cannot be the bottom edge 
-    // if the potential neighbor is x_dim less, you cannot be on the top edge
-    // get all the indicies of a specific type of neighbor, based on the maze's neighborhood rules 
+    // take special care to not "wrap" around the edges of the grid when looking for neighbors
     pub fn indicies_of_neighbors(&self, target: i32, look_for: Block) -> Vec<i32> {
         let mut vec = Vec::new();
         for i in self.neighbor_offsets {
@@ -219,6 +220,7 @@ impl Maze {
         }
     }
 
+    // helper function that constructs the path of the a* algo based on the nodes it has visited
     fn construct_path(traveled: Vec<usize>, start: usize, end: usize) -> Vec<usize> {
         let mut path = Vec::new();
         path.push(end);
@@ -238,30 +240,6 @@ impl Maze {
 
 }
 
-#[derive(Debug)]
-pub struct Color {
-    r: i32,
-    g: i32,
-    b: i32,
-}
-
-impl Color {
-    pub fn red() -> Self {
-        return Color{ r: 255, g: 0, b: 0}
-    }
-
-    pub fn black() -> Self {
-        return Color{ r: 0, g: 0, b: 0}
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum Block {
-    Empty,
-    Full,
-    Occupied,
-    Goal,
-}
 
 /*
 maze generation algorithms
@@ -275,11 +253,10 @@ prims/maybe all of them could work by having potential walls only on every other
 impl Maze {
 
     /*
-    not sure if i can call this real prims
-    the dimensions have to be odd for this to work.
+    the dimensions have to be odd for this to work right.
     */
     pub fn generate_prims(&mut self) {
-        // create a sub-grid of nodes
+        // create a sub-grid of nodes, spaced out by a 2 in every dimension
 
         /*
         Some(false) -> No edge to vertex
@@ -296,7 +273,6 @@ impl Maze {
             })
             .collect();
 
-        // println!("-> {:?}", prim_nodes.len());
 
         let prim_offsets = neighborhood::get_offsets(self.dims, &neighborhood::NeighborhoodMethod::Prims);
 
@@ -311,9 +287,7 @@ impl Maze {
         let mut edges: Vec<Edge> = Vec::new();
         let mut adj_list: Vec<Vec<&Edge>> = vec![Vec::new(); self.blocks.len()];
 
-
-        // println!("-> {:?}", indicies_of_prim_neighbors(0, &mut self.blocks, self.dims, prim_offsets));
-        // // find all the edges that exist
+        // find all the edges that exist
         for (i, node) in prim_nodes
             .iter()
             .enumerate() 
@@ -334,26 +308,20 @@ impl Maze {
             }
         }
 
+        // sort edges by ascending weight
         edges.sort_by(|a,b| a.cmp(b));
 
-        // println!("edges: {:?}", edges);
-
-        // // // create adjacency list with the edges
+        // create adjacency list with the edges
         for (i, edge) in edges.iter().enumerate() {
-            // println!("edge: {:?}", edge.borrow());
             adj_list[edge.to].push(&edges[i]);
             adj_list[edge.from].push(&edges[i]);
         }
 
-        
-
         let starting_node = 0;
-        let ending_node = self.blocks.len() - 1;
+        // let ending_node = self.blocks.len() - 1;
         let mut p = starting_node;
-        self.blocks[ending_node] = Block::Full;
+        // self.blocks[ending_node] = Block::Full;
 
-
-        let start_uncomment_here = 0;
 
         // start at one node, p
         // look at its edges that are not already connected. 
@@ -365,7 +333,6 @@ impl Maze {
 
         // rename p and next_p to point_a, point_b. they are not "next"
         for i in 0..1000 {
-            // println!("i: {:?}", i);
             let mut next_p = p;
             let mut mid_coord = 0;
             let mut draw_mid = false;
@@ -377,36 +344,26 @@ impl Maze {
 
                     mid_coord = self.mid_coord(edge.to, edge.from);
                     draw_mid = true;
-                    
+
 
                     if next_p == 140 {
                         let stop_here = 0;
                     }
 
                     edges.remove(i);
-
                     break;
                 }
             }
 
             self.blocks[p] = Block::Empty;
             self.blocks[next_p] = Block::Empty;
-            // let mid_coord = self.mid_coord(p, next_p);
-            // draw_mid = true;
+
             if draw_mid { self.blocks[mid_coord] = Block::Empty; }
 
             prim_nodes[p] = Some(true);
             prim_nodes[next_p] = Some(true);
 
-            // let x = 0; // debug breakpoint
-
-            // p = next_p;
-
-            // self.print();
-
         }
-
-
 
     }
 
@@ -417,21 +374,6 @@ impl Maze {
         let avg_x = (start_coord.0 + end_coord.0) / 2;
         let avg_y = (start_coord.1 + end_coord.1) / 2;
         let avg_z = (start_coord.2 + end_coord.2) / 2;
-
-        // if (
-        //     (start_coord.0 - end_coord.0).abs() > 2 ||
-        //     (start_coord.1 - end_coord.1).abs() > 2 ||
-        //     (start_coord.2 - end_coord.2).abs() > 2
-        // ) {
-        //     return 999;
-        // }
-
-        // let mut c = 0;
-        // if (start_coord.0 - end_coord.0).abs() >= 2 { c+=1; }
-        // if (start_coord.1 - end_coord.1).abs() >= 2 { c+=1; }
-        // if (start_coord.2 - end_coord.2).abs() >= 2 { c+=1; }
-
-        // if c>1 { return 999; }
 
         return self.index_of_coord((avg_x, avg_y, avg_z)).unwrap();
     }
@@ -460,13 +402,10 @@ impl Edge {
     }
 }
 
-// how the hell do i create an edge between all adjacent nodes
-
 // duplicate function except itll use a new neighborhood method. this should be consolidated with the first function,
 // the first function should take neighbor offsets as an argument
 pub fn indicies_of_prim_neighbors(target: i32, nodes: &mut Vec<Block>, dims: (i32, i32, i32), prim_offsets: [Option<i32>; 26]) -> Vec<usize> {
     let mut vec = Vec::new();
-    // let neighbor_offsets = neighborhood::get_offsets(dims, &neighborhood::NeighborhoodMethod::Prims);
     for i in prim_offsets {
         if let None = i { continue ;}
 
@@ -489,41 +428,7 @@ pub fn indicies_of_prim_neighbors(target: i32, nodes: &mut Vec<Block>, dims: (i3
     return vec;
 }
 
-// well i messed up because every node has a weight for all its neighbors, which means the weight from node a -> b != weight b -> a
-// it might still be fine because its random but it might also not be fine idk
-
-// the wall can trace itself backwards because each real topological edge is represented by two Edge structs, which is bad
-
-// MRE of my problem: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=5e4e1f1959f96299a6b313fab3bb4889
-
-// more minimal: https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=5e4e1f1959f96299a6b313fab3bb4889
-
 
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
-
-// could give each edge an id that is its index in edges?
-// need to rework so that the maze startes all blocked and then the gen algos clear out space
-// for some reason some edges are not always being maked as connected when they should be
-// its back tracking too, which shouldnt be possible because there should only be one path youll ever go when you come across a node.
-// maybe it only gets marked as connected later for some reason
-
-// rework this probably.
-/*
-idk why it took me so long to realize but i think that the edges dont have to be marked as connected,
-rather the nodes have to be marked wheter they are connected to anything or not.
-
-*/
-
-// impl Maze {
-//     pub fn invert(&mut self) {
-//         for mut block in self.blocks {
-//             match block {
-//                 Block::Full => block = Block::Empty,
-//                 Block::Empty => block = Block::Full,
-//                 _ => (),
-//             }
-//         }
-//     }
-// }
